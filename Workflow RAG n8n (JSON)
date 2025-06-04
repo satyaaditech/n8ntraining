@@ -1,0 +1,200 @@
+{
+  "name": "Workflow RAG Sederhana n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "fields": {
+          "field": [
+            {
+              "name": "user_query",
+              "type": "string",
+              "default": "Apa itu Retrieval Augmented Generation?"
+            }
+          ]
+        }
+      },
+      "id": "3e0e8b8a-1b1b-4e8e-8b8a-1b1b1b1b1b1b",
+      "name": "StartTrigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "addOrReplace",
+        "items": "[{\"doc_id\":\"doc001\",\"document_text\":\"Retrieval Augmented Generation (RAG) adalah sebuah arsitektur AI yang meningkatkan kualitas jawaban dari Large Language Models (LLMs) dengan mengambil informasi relevan dari sumber data eksternal. Ini membantu mengurangi halusinasi dan menjaga informasi tetap terkini.\"},{\"doc_id\":\"doc002\",\"document_text\":\"n8n adalah platform otomatisasi alur kerja yang memungkinkan pengguna untuk menghubungkan berbagai aplikasi dan layanan. Dengan n8n, Anda bisa membangun alur kerja kompleks tanpa perlu menulis banyak kode, termasuk integrasi dengan berbagai API dan layanan AI.\"},{\"doc_id\":\"doc003\",\"document_text\":\"FAISS (Facebook AI Similarity Search) adalah library yang dikembangkan oleh Facebook AI untuk pencarian kemiripan yang efisien dan pengelompokan vektor padat. Sangat berguna untuk aplikasi yang melibatkan pencarian skala besar berdasarkan kemiripan.\"}]"
+      },
+      "id": "a2c3e4d5-f6a7-b8c9-d0e1-f2a3b4c5d6e7",
+      "name": "KnowledgeBase",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1.1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "textField": "document_text",
+        "documentIdField": "doc_id",
+        "embeddings": {
+          "service": "openAiEmbeddings",
+          "modelName": "text-embedding-3-small"
+        },
+        "options": {}
+      },
+      "id": "b3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8",
+      "name": "UpsertToVectorStore",
+      "type": "n8n-nodes-base.vectorStoreFaiss",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ],
+      "credentials": {
+        "openAiEmbeddingsApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "Your OpenAI Credential Name"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "similaritySearch",
+        "query": "={{ $('StartTrigger').item.json.user_query }}",
+        "k": 3,
+        "embeddings": {
+          "service": "openAiEmbeddings",
+          "modelName": "text-embedding-3-small"
+        },
+        "options": {}
+      },
+      "id": "c4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8g9",
+      "name": "SearchInVectorStore",
+      "type": "n8n-nodes-base.vectorStoreFaiss",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ],
+      "credentials": {
+        "openAiEmbeddingsApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "Your OpenAI Credential Name"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "final_prompt_for_llm",
+              "value": "Anda adalah asisten AI yang sangat membantu. Berdasarkan konteks yang diberikan di bawah ini, jawablah pertanyaan pengguna. Jika informasi tidak ditemukan dalam konteks, katakan bahwa Anda tidak dapat menemukan jawabannya berdasarkan informasi yang diberikan.\n\nKonteks yang Relevan:\n---\n{{ $('SearchInVectorStore').item.documents.map(doc => doc.pageContent).join(\"\\n---\\n\") }}\n---\n\nPertanyaan Pengguna: {{ $('StartTrigger').item.json.user_query }}\n\nJawaban Anda:"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8g9h0",
+      "name": "FormatPrompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1.2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "message": [
+            {
+              "role": "user",
+              "content": "={{ $('FormatPrompt').item.json.final_prompt_for_llm }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e6a7b8c9-d0e1-f2a3-b4c5-d6e7f8g9h0i1",
+      "name": "GenerateAnswer",
+      "type": "n8n-nodes-base.openAiChat",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "Your OpenAI Credential Name"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "StartTrigger": {
+      "main": [
+        [
+          {
+            "node": "KnowledgeBase",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "KnowledgeBase": {
+      "main": [
+        [
+          {
+            "node": "UpsertToVectorStore",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "UpsertToVectorStore": {
+      "main": [
+        [
+          {
+            "node": "SearchInVectorStore",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "SearchInVectorStore": {
+      "main": [
+        [
+          {
+            "node": "FormatPrompt",
+            "input": "main"
+          }
+        ]
+      ]
+    },
+    "FormatPrompt": {
+      "main": [
+        [
+          {
+            "node": "GenerateAnswer",
+            "input": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "f7b8c9d0-e1f2-a3b4-c5d6-e7f8g9h0i1j2",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
